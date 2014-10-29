@@ -349,7 +349,7 @@ namespace Omega
 		{
 			for (size_t j = 0; j < mat2.ColSize(); ++j)
 			{
-				mat2[i][j] = conj(mat1[j][i]);
+				mat2[i][j] = conj(mat1[i][j]);
 			}
 		}
 		return move(mat2);
