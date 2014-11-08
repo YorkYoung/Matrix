@@ -2,6 +2,10 @@
 #ifndef __OMEGA_MATRIX_H__
 #define __OMEGA_MATRIX_H__
 
+#if __cplusplus < 201103
+#error This header file needs c++11 support.
+#endif
+
 #include <complex>
 #include <valarray>
 #include <exception>
@@ -15,39 +19,53 @@ namespace Omega
 	{
 	public:
 		MatrixMissMatchedException(size_t rowSize1, size_t colSize1, size_t rowSize2, size_t colSize2) :
-			exception("Matrix miss matched!"),
 			RowSize1(rowSize1), ColSize1(colSize1),
 			RowSize2(rowSize2), ColSize2(colSize2)
 		{
 
 		}
 
+		const char* what() const noexcept override
+		{
+			return "Matrix miss matched!";
+		}
+
 		size_t RowSize1, ColSize1, RowSize2, ColSize2;
 	};
 
 	template <typename T>
-	class Matrix : public valarray<valarray<T>>
+	class Matrix
 	{
+	private:
+		valarray<T> mElems;
+		size_t mRowSize, mColSize;
 	public:
-		Matrix()
+		Matrix() : 
+			mElems(), mRowSize(0), mColSize(0)
 		{
-
+			
 		}
 
-		Matrix(size_t rowSize, size_t colSize)
+		Matrix(size_t rowSize, size_t colSize) : 
+			mElems(static_cast<T>(0), rowSize*colSize),
+			mRowSize(rowSize), mColSize(colSize)
 		{
-			resize(rowSize, colSize);
+
 		}
 
 		Matrix(initializer_list<initializer_list<T>> list) :
-			valarray(list.size())
+			mElems(), mRowSize(0), mColSize(0)
 		{
-			if (RowSize() == 0) return;
+			size_t rowSize = list.size();
+			if (rowSize == 0) return;
 			size_t colSize = list.begin()->size();
+			this->mElems.resize(rowSize*colSize);
+			this->mRowSize = rowSize;
+			this->mColSize = colSize;
+
 			size_t i = 0;
 			for (const initializer_list<T>& rowList : list)
-			{				
-				(*this)[i].resize(colSize, T(0));
+			{
 				size_t j = 0;
 				for (const T& elem : rowList)
 				{
@@ -60,53 +78,59 @@ namespace Omega
 		}
 
 		Matrix(Matrix<T>&& mat) :
-			valarray(move(mat))
+			mElems(move(mat.mElems)), 
+			mRowSize(mat.mRowSize), mColSize(mat.mColSize)
 		{
 
 		}
 
 		Matrix(const Matrix<T>& mat) :
-			valarray(mat)
+			mElems(mat.mElems), 
+			mRowSize(mat.mRowSize), mColSize(mat.mColSize)
 		{
 
 		}
 
 		Matrix<T>& operator = (Matrix<T>&& mat)
 		{
-			valarray::operator=(move(mat));
+			this->mElems = move(mat.mElems);
+			this->mRowSize = mat.mRowSize;
+			this->mColSize = mat.mColSize;
 			return *this;
 		}
 
 		Matrix<T>& operator = (const Matrix<T>& mat)
 		{
-			valarray::operator=(mat);
+			this->mElems = mat.mElems;
+			this->mRowSize = mat.mRowSize;
+			this->mColSize = mat.mColSize;
 			return *this;
 		}
 
 		size_t Size() const
 		{
-			return RowSize() * ColSize();
+			return this->mRowSize * this->mColSize;
 		}
 
 		size_t RowSize() const
 		{
-			return size();
+			return this->mRowSize;
 		}
 
 		size_t ColSize() const
 		{
-			if (RowSize() == 0) return 0;
-			return (*this)[0].size();
+			return this->mColSize;
 		}
 
-		void resize(size_t rowSize, size_t colSize)
+		T* operator [] (int index)
 		{
-			valarray::resize(rowSize);
-			for (size_t i = 0; i < rowSize; ++i)
-			{
-				(*this)[i].resize(colSize);
-			}
+			return &(this->mElems[index*mColSize]);
 		}
+
+		const T* operator [] (int index) const
+		{
+			return &(this->mElems[index*mColSize]);
+		}		
 
 		Matrix<T> operator + () const
 		{
@@ -115,10 +139,10 @@ namespace Omega
 
 		Matrix<T> operator - () const
 		{
-			Matrix<T> mat2(RowSize(), ColSize());
-			for (size_t i = 0; i < RowSize(); ++i)
+			Matrix<T> mat2(this->mRowSize, this->mColSize);
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
 					mat2[i][j] = -(*this)[i][j];
 				}
@@ -128,10 +152,10 @@ namespace Omega
 
 		Matrix<T> operator * (T num) const
 		{
-			Matrix<T> mat2(RowSize(), ColSize());
-			for (size_t i = 0; i < RowSize(); ++i)
+			Matrix<T> mat2(this->mRowSize, this->mColSize);
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
 					mat2[i][j] = (*this)[i][j] * num;
 				}
@@ -141,10 +165,10 @@ namespace Omega
 
 		Matrix<T> operator / (T num) const
 		{
-			Matrix<T> mat2(RowSize(), ColSize());
-			for (size_t i = 0; i < RowSize(); ++i)
+			Matrix<T> mat2(this->mRowSize, this->mColSize);
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
 					mat2[i][j] = (*this)[i][j] / num;
 				}
@@ -154,9 +178,9 @@ namespace Omega
 
 		Matrix<T>& operator *= (T num) const
 		{
-			for (size_t i = 0; i < RowSize(); ++i)
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
 					(*this)[i][j] *= num;
 				}
@@ -166,11 +190,11 @@ namespace Omega
 
 		Matrix<T>& operator /= (T num) const
 		{
-			for (size_t i = 0; i < RowSize(); ++i)
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
-					*this)[i][j] /= num;
+					(*this)[i][j] /= num;
 				}
 			}
 			return *this;
@@ -178,17 +202,18 @@ namespace Omega
 
 		Matrix<T>& operator += (const Matrix<T>& mat2)
 		{
-			if (RowSize() != mat2.RowSize()	|| ColSize() != mat2.ColSize())
+			if (this->mRowSize != mat2.mRowSize
+				|| this->mColSize() != mat2.mColSize)
 			{
 				throw MatrixMissMatchedException(
-					RowSize(), ColSize(),
-					mat2.RowSize(), mat2.ColSize()
+					this->mRowSize, this->mColSize,
+					mat2.mRowSize, mat2.mColSize
 					);
 			}
 
-			for (size_t i = 0; i < mat1.RowSize(); ++i)
+			for (size_t i = 0; i < mat2.mRowSize; ++i)
 			{
-				for (size_t j = 0; j < mat1.ColSize(); ++j)
+				for (size_t j = 0; j < mat2.mColSize; ++j)
 				{
 					(*this)[i][j] += mat2[i][j];
 				}
@@ -198,19 +223,20 @@ namespace Omega
 
 		Matrix<T>& operator -= (const Matrix<T>& mat2)
 		{
-			if (RowSize() != mat2.RowSize() || ColSize() != mat2.ColSize())
+			if (this->mRowSize != mat2.mRowSize
+				|| this->mColSize() != mat2.mColSize)
 			{
 				throw MatrixMissMatchedException(
-					RowSize(), ColSize(),
-					mat2.RowSize(), mat2.ColSize()
+					this->mRowSize, this->mColSize,
+					mat2.mRowSize, mat2.mColSize
 					);
 			}
 
-			for (size_t i = 0; i < mat1.RowSize(); ++i)
+			for (size_t i = 0; i < mat2.mRowSize; ++i)
 			{
-				for (size_t j = 0; j < mat1.ColSize(); ++j)
+				for (size_t j = 0; j < mat2.mColSize; ++j)
 				{
-					(*this)[i][j] += mat2[i][j];
+					(*this)[i][j] -= mat2[i][j];
 				}
 			}
 			return *this;
@@ -218,18 +244,19 @@ namespace Omega
 
 		Matrix<T> operator + (const Matrix<T>& mat2) const
 		{
-			if (RowSize() != mat2.RowSize()	|| ColSize() != mat2.ColSize())
+			if (this->mRowSize != mat2.mRowSize
+				|| this->mColSize() != mat2.mColSize)
 			{
 				throw MatrixMissMatchedException(
-					RowSize(), ColSize(),
-					mat2.RowSize(), mat2.ColSize()
+					this->mRowSize, this->mColSize,
+					mat2.mRowSize, mat2.mColSize
 					);
 			}
 
-			Matrix<T> mat3(RowSize(), ColSize());
-			for (size_t i = 0; i < RowSize(); ++i)
+			Matrix<T> mat3(this->mRowSize, this->mColSize);
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
 					mat3[i][j] = (*this)[i][j] + mat2[i][j];
 				}
@@ -239,18 +266,19 @@ namespace Omega
 
 		Matrix<T> operator - (const Matrix<T>& mat2) const
 		{
-			if (RowSize() != mat2.RowSize() || ColSize() != mat2.ColSize())
+			if (this->mRowSize != mat2.mRowSize
+				|| this->mColSize() != mat2.mColSize)
 			{
 				throw MatrixMissMatchedException(
-					RowSize(), ColSize(),
-					mat2.RowSize(), mat2.ColSize()
+					this->mRowSize, this->mColSize,
+					mat2.mRowSize, mat2.mColSize
 					);
 			}
 
-			Matrix<T> mat3(RowSize(), ColSize());
-			for (size_t i = 0; i < RowSize(); ++i)
+			Matrix<T> mat3(this->mRowSize, this->mColSize);
+			for (size_t i = 0; i < this->mRowSize; ++i)
 			{
-				for (size_t j = 0; j < ColSize(); ++j)
+				for (size_t j = 0; j < this->mColSize; ++j)
 				{
 					mat3[i][j] = (*this)[i][j] - mat2[i][j];
 				}
@@ -260,21 +288,21 @@ namespace Omega
 
 		Matrix<T> operator * (const Matrix<T>& mat2)
 		{
-			if (ColSize() != mat2.RowSize())
+			if (this->mColSize!= mat2.mRowSize)
 			{
 				throw MatrixMissMatchedException(
-					RowSize(), ColSize(),
-					mat2.RowSize(), mat2.ColSize()
+					this->mRowSize, this->mColSize,
+					mat2.mRowSize, mat2.mColSize
 					);
 			}
 
-			Matrix<T> mat3(RowSize(), mat2.ColSize());
-			for (size_t i = 0; i < mat3.RowSize(); ++i)
+			Matrix<T> mat3(this->mRowSize, mat2.mColSize);
+			for (size_t i = 0; i < mat3.mRowSize; ++i)
 			{
-				for (size_t j = 0; j < mat3.ColSize(); ++j)
+				for (size_t j = 0; j < mat3.mColSize; ++j)
 				{
 					mat3[i][j] = 0;
-					for (size_t k = 0; k < ColSize(); ++k)
+					for (size_t k = 0; k < this->mColSize; ++k)
 					{
 						mat3[i][j] += (*this)[i][k] * mat2[k][j];
 					}
@@ -290,9 +318,9 @@ namespace Omega
 
 		bool operator == (const Matrix<T>& mat2)
 		{
-			for (size_t i = 0; i < mat1.RowSize(); ++i)
+			for (size_t i = 0; i < mat2.mRowSize; ++i)
 			{
-				for (size_t j = 0; j < mat1.ColSize(); ++j)
+				for (size_t j = 0; j < mat2.mColSize; ++j)
 				{
 					if ((*this)[i][j] != mat2[i][j]) return false;
 				}
@@ -302,9 +330,9 @@ namespace Omega
 
 		bool operator != (const Matrix<T>& mat2)
 		{
-			for (size_t i = 0; i < mat1.RowSize(); ++i)
+			for (size_t i = 0; i < mat2.mRowSize; ++i)
 			{
-				for (size_t j = 0; j < mat1.ColSize(); ++j)
+				for (size_t j = 0; j < mat2.mColSize; ++j)
 				{
 					if ((*this)[i][j] != mat2[i][j]) return true;
 				}
@@ -373,10 +401,14 @@ namespace Omega
 	{
 	public:
 		MatrixNotSquareException(size_t rowSize, size_t colSize) :
-			exception("Matrix is not square!"), 
 			RowSize(rowSize), ColSize(colSize)
 		{
 
+		}
+
+		const char* what() const noexcept override
+		{
+			return "Matrix is not square!";
 		}
 
 		size_t RowSize, ColSize;
@@ -386,10 +418,14 @@ namespace Omega
 	{
 	public:
 		MatrixStrangeException(size_t rank, size_t rowSize, size_t colSize) :
-			exception("Strange matrix!"),
 			Rank(rank), RowSize(rowSize), ColSize(colSize)
 		{
 
+		}
+
+		const char* what() const noexcept override
+		{
+			return "Strange matrix!";
 		}
 
 		size_t Rank, RowSize, ColSize;
@@ -627,8 +663,7 @@ namespace Omega
 		size_t rowSize = mat2.RowSize(), colSize = mat2.ColSize();
 		size_t minSize = rowSize < colSize ? rowSize : colSize;		
 		T sign = 1;
-		size_t k = 0;
-		for (k = 0; k < min_size; ++k)
+		for (size_t k = 0; k < minSize; ++k)
 		{
 			size_t iMax, jMax;
 			AbsT maxAbs = 0, tmpAbs = 0;
@@ -655,32 +690,33 @@ namespace Omega
 					mat2[k][j] = mat2[iMax][j];
 					mat2[iMax][j] = tmp;
 				}
-				sign *= -1;
+				sign = -sign;
 			}
 			if (jMax != k)
 			{
 				for (size_t i = 0; i < rowSize; ++i)
 				{
 					//swap(mat2[i][k], mat2[i][jMax]);
-					T tmp = mat2[i][jMax];
+					T tmp = mat2[i][k];
 					mat2[i][k] = mat2[i][jMax];
 					mat2[i][jMax] = tmp;
 				}
-				sign *= -1;
+				sign = -sign;
 			}
-			for (i = k + 1; i < rowSize; ++i)
+
+			for (size_t i = k + 1; i < rowSize; ++i)
 			{
-				T quotient = result[i][k] / result[k][k];
-				result[i][k] = 0;
-				for (j = k + 1; j < width; ++j)
+				T quotient = mat2[i][k] / mat2[k][k];
+				mat2[i][k] = 0;
+				for (size_t j = k + 1; j < colSize; ++j)
 				{
-					result[i][j] -= quotient * result[k][j];
+					mat2[i][j] -= quotient * mat2[k][j];
 				}
 			}
 		}
-		for (size_t i = k; i < rowSize; ++i)
+		for (size_t i = minSize; i < rowSize; ++i)
 		{
-			for (size_t j = k; j < colSize; ++j)
+			for (size_t j = minSize; j < colSize; ++j)
 			{
 				mat2[i][j] = 0;
 			}
